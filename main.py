@@ -48,7 +48,7 @@ def fuzzify_blood_sugar(blood_sugar):
     return {
         'low': trapezoid(blood_sugar, a=50, b=50, c=70, d=90),
         'normal': trapezoid(blood_sugar, a=70, b=90, c=100, d=110),
-        'high': trapezoid(blood_sugar, a=100, b=110, c=200, d=200)
+        'high': trapezoid(blood_sugar, a=100, b=110, c=160, d=160)
     }
 
 
@@ -57,37 +57,25 @@ def apply_rules(age_fuzzy, bmi_fuzzy, activity_fuzzy):
     # noinspection PyListCreation
     rules = []
 
-    # Rule 1: If age is young and BMI is normal and activity is active, then blood sugar is normal
-    rules.append(('low', min(age_fuzzy['young'], bmi_fuzzy['low'], activity_fuzzy['active'])))
+    # Rule 1: If age is young OR BMI is low, then blood sugar is low
+    rules.append(('low', max(age_fuzzy['young'], bmi_fuzzy['low'])))  # OR operation
 
-    # Rule 2: If age is young and BMI is high and activity is sedentary, then blood sugar is high
-    rules.append(('high', min(age_fuzzy['young'], bmi_fuzzy['high'], activity_fuzzy['sedentary'])))
+    # Rule 2: If age is middle-aged AND activity is moderate, then blood sugar is normal
+    rules.append(('normal', min(age_fuzzy['middle_aged'], activity_fuzzy['moderate'])))  # AND operation
 
-    # Rule 3: If age is middle-aged and BMI is normal and activity is moderate, then blood sugar is normal
-    rules.append(('normal', min(age_fuzzy['middle_aged'], bmi_fuzzy['normal'], activity_fuzzy['moderate'])))
+    # Rule 3: If age is old AND BMI is high, then blood sugar is high
+    rules.append(('high', min(age_fuzzy['old'], bmi_fuzzy['high'])))  # AND operation
 
-    # Rule 4: If age is middle-aged and BMI is high and activity is sedentary, then blood sugar is high
-    rules.append(('high', min(age_fuzzy['middle_aged'], bmi_fuzzy['high'], activity_fuzzy['sedentary'])))
+    # Rule 4: If BMI is high OR activity is sedentary, then blood sugar is high
+    rules.append(('high', max(bmi_fuzzy['high'], activity_fuzzy['sedentary'])))  # OR operation
 
-    # Rule 5: If age is old and BMI is low and activity is active, then blood sugar is normal
-    rules.append(('normal', min(age_fuzzy['old'], bmi_fuzzy['low'], activity_fuzzy['active'])))
-
-    # Rule 6: If age is old and BMI is high and activity is sedentary, then blood sugar is high
-    rules.append(('high', min(age_fuzzy['old'], bmi_fuzzy['high'], activity_fuzzy['sedentary'])))
-
-    # Rule 7: If age is young and BMI is normal and activity is sedentary, then blood sugar is normal
-    rules.append(('normal', min(age_fuzzy['young'], bmi_fuzzy['normal'], activity_fuzzy['sedentary'])))
-
-    # Rule 8: If age is old and BMI is normal and activity is moderate, then blood sugar is normal
-    rules.append(('normal', min(age_fuzzy['old'], bmi_fuzzy['normal'], activity_fuzzy['moderate'])))
-
-    # Rule 9: If age is middle-aged and BMI is low and activity is active, then blood sugar is low
-    rules.append(('low', min(age_fuzzy['middle_aged'], bmi_fuzzy['low'], activity_fuzzy['active'])))
+    # Rule 5: If age is young AND activity is active, then blood sugar is low
+    rules.append(('low', min(age_fuzzy['young'], activity_fuzzy['active'])))  # AND operation
 
     return rules
 
 
-# Defuzzification using centroid method
+# Defuzzification using "Height Defuzzification"
 def defuzzify(rules, blood_sugar_levels):
     numerator = 0
     denominator = 0
@@ -114,7 +102,7 @@ def predict_blood_sugar(age_input, bmi_input, activity_input):
     blood_sugar_levels = {
         'low': np.arange(50, 91, 1),
         'normal': np.arange(70, 111, 1),
-        'high': np.arange(100, 201, 1)
+        'high': np.arange(100, 161, 1)
     }
 
     # Defuzzify the result to get a crisp value
@@ -123,48 +111,128 @@ def predict_blood_sugar(age_input, bmi_input, activity_input):
     return predicted_blood_sugar
 
 
-# Simulate input data streams
-time_steps = 100
-time_space = np.linspace(start=0, stop=1, num=time_steps)
+def vectorize_fuzzy_output(lin_space, fuzzyfi_func):
+    result = {}
+    for x in lin_space:
+        fuzzy_age = fuzzyfi_func(x)
+        for fuzzy_name in fuzzy_age.keys():
+            if fuzzy_name not in result:
+                result[fuzzy_name] = []
+            result[fuzzy_name].append(fuzzy_age[fuzzy_name])
 
-ages = (80 - 10) * time_space + 10  # Age changes from 20 to 70 over time
-bmis = 20 + 3 * (2 * np.random.rand(time_steps) - 1) + 6 * time_space  # BMI changes from
-activities = 8 + 2 * (2 * np.random.rand(time_steps) - 1) - 2 * time_space  # Activity level changes
+    for fuzzy_name, value in result.items():
+        result[fuzzy_name] = np.array(value)
+    return result
 
-# Predict blood sugar levels for each time step
-predicted_blood_sugars = [predict_blood_sugar(ages[t], bmis[t], activities[t]) for t in range(time_steps)]
 
-# Plotting
-plt.figure(figsize=(10, 9))
+def draw_input_fuzzy_variable():
+    age_space = np.linspace(start=0, stop=100, num=1000)
+    bmi_space = np.linspace(start=10, stop=45, num=1000)
+    activity_space = np.linspace(start=0, stop=10, num=1000)
+    sugar_space = np.linspace(start=50, stop=160, num=1000)
 
-plt.subplot(4, 1, 1)
-plt.plot(ages, color="tab:blue", label='Age')
-plt.title('Age over Time')
-plt.ylabel('Age')
-plt.xticks([])
-plt.legend()
+    age_plot_values = vectorize_fuzzy_output(lin_space=age_space, fuzzyfi_func=fuzzify_age)
+    bmi_plot_values = vectorize_fuzzy_output(lin_space=bmi_space, fuzzyfi_func=fuzzify_bmi)
+    activity_plot_values = vectorize_fuzzy_output(lin_space=activity_space, fuzzyfi_func=fuzzify_activity)
+    sugar_plot_values = vectorize_fuzzy_output(lin_space=sugar_space, fuzzyfi_func=fuzzify_blood_sugar)
 
-plt.subplot(4, 1, 2)
-plt.plot(bmis, color="tab:orange", label='BMI')
-plt.title('BMI over Time')
-plt.ylabel('BMI')
-plt.xticks([])
-plt.legend()
+    plt.figure(figsize=(10, 9))
 
-plt.subplot(4, 1, 3)
-plt.plot(activities, color="tab:green", label='Activity')
-plt.title('Activity Level over Time')
-plt.ylabel('Activity')
-plt.xticks([])
-plt.legend()
+    plt.subplot(4, 1, 1)
+    plt.title('Fuzzy Age')
+    for fuzzy_name, value in age_plot_values.items():
+        plt.plot(age_space, value, label=f"{fuzzy_name}")
+    plt.hlines(y=0, xmin=np.min(age_space), xmax=np.max(age_space), colors="black")
+    plt.legend(loc="center right")
 
-plt.subplot(4, 1, 4)
-plt.plot(predicted_blood_sugars, color="tab:red", label='Blood Sugar')
-plt.title('Predicted Blood Sugar over Time')
-plt.xlabel('Time Steps')
-plt.ylabel('Blood Sugar Level')
-plt.xticks([])
-plt.legend()
+    plt.subplot(4, 1, 2)
+    plt.title('Fuzzy BMI')
+    for fuzzy_name, value in bmi_plot_values.items():
+        plt.plot(bmi_space, value, label=f"{fuzzy_name}")
+    plt.hlines(y=0, xmin=np.min(bmi_space), xmax=np.max(bmi_space), colors="black")
+    plt.legend(loc="center right")
 
-plt.tight_layout()
-plt.show()
+    plt.subplot(4, 1, 3)
+    plt.title('Fuzzy Activity')
+    for fuzzy_name, value in activity_plot_values.items():
+        plt.plot(activity_space, value, label=f"{fuzzy_name}")
+    plt.hlines(y=0, xmin=np.min(activity_space), xmax=np.max(activity_space), colors="black")
+    plt.legend(loc="center right")
+
+    plt.subplot(4, 1, 4)
+    plt.title('Fuzzy Sugar Level')
+    for fuzzy_name, value in sugar_plot_values.items():
+        plt.plot(sugar_space, value, label=f"{fuzzy_name}")
+    plt.hlines(y=0, xmin=np.min(sugar_space), xmax=np.max(sugar_space), colors="black")
+    plt.legend(loc="center right")
+
+    plt.tight_layout()
+    plt.show()
+
+
+def draw_output_over_time():
+    # Simulate input data streams
+    time_steps = 100
+    time_space = np.linspace(start=0, stop=1, num=time_steps)
+
+    noise_1 = (2 * np.random.randn(time_steps) - 1)
+    noise_2 = (2 * np.random.randn(time_steps) - 1)
+
+    # Age changes from 10 to 80 over time
+    ages = (80 - 10) * time_space + 10
+
+    # BMI changes over time
+    bmis = 20 + 0.2 * noise_1 + 6 * time_space
+
+    # Activity level changes
+    activities = 9 + 0.2 * noise_2 - 3 * time_space
+
+    # Predict blood sugar levels for each time step
+    predicted_blood_sugars = [predict_blood_sugar(ages[t], bmis[t], activities[t]) for t in range(time_steps)]
+
+    # Plotting
+    plt.figure(figsize=(10, 9))
+
+    plt.subplot(4, 1, 1)
+    plt.plot(ages, color="tab:blue", label='Age')
+    plt.title('Age over Time')
+    plt.ylabel('Age')
+    plt.ylim(ymin=0, ymax=100)
+    plt.xticks([])
+    plt.legend()
+
+    plt.subplot(4, 1, 2)
+    plt.plot(bmis, color="tab:orange", label='BMI')
+    plt.title('BMI over Time')
+    plt.ylabel('BMI')
+    plt.ylim(ymin=18, ymax=28)
+    plt.xticks([])
+    plt.legend()
+
+    plt.subplot(4, 1, 3)
+    plt.plot(activities, color="tab:green", label='Activity')
+    plt.title('Activity Level over Time')
+    plt.ylabel('Activity')
+    plt.ylim(ymin=0, ymax=10)
+    plt.xticks([])
+    plt.legend()
+
+    plt.subplot(4, 1, 4)
+    plt.plot(predicted_blood_sugars, color="tab:red", label='Blood Sugar')
+    plt.title('Predicted Blood Sugar over Time')
+    plt.xlabel('Time Steps')
+    plt.ylabel('Blood Sugar Level')
+    plt.xticks([])
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+
+def main():
+    draw_input_fuzzy_variable()
+    draw_output_over_time()
+
+
+if __name__ == '__main__':
+    main()
