@@ -83,7 +83,7 @@ def defuzzify(space, aggregation):
         if weight > 0:
             numerator += weight * level
             denominator += weight
-    return numerator / denominator if denominator != 0 else 0
+    return numerator / denominator if denominator != 0 else None
 
 
 # Predict blood sugar level based on inputs
@@ -122,6 +122,9 @@ def predict_blood_sugar(age_input, bmi_input, activity_input):
 
     # Apply deffuzzyfication
     predicted_blood_sugar = defuzzify(space=sugar_space, aggregation=aggregation)
+
+    if predicted_blood_sugar is None:
+        predicted_blood_sugar = sugar_space[0]
     return predicted_blood_sugar
 
 
