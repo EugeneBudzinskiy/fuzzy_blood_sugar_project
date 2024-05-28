@@ -76,20 +76,22 @@ def apply_rules(age_fuzzy, bmi_fuzzy, activity_fuzzy):
 
 
 # Defuzzification using "Height Defuzzification"
-def defuzzify(rules, blood_sugar_levels):
+def defuzzify(space, aggregation):
     numerator = 0
     denominator = 0
-    for level, weight in rules:
+    for level, weight in zip(space, aggregation):
         if weight > 0:
-            centroid = np.mean(blood_sugar_levels[level])
-            numerator += weight * centroid
+            numerator += weight * level
             denominator += weight
-
-    return numerator / denominator if denominator != 0 else np.mean(blood_sugar_levels["low"])
+    return numerator / denominator if denominator != 0 else 0
 
 
 # Predict blood sugar level based on inputs
 def predict_blood_sugar(age_input, bmi_input, activity_input):
+    # Spaces
+    sugar_space = np.linspace(start=50, stop=160, num=100)
+    sugar_space_fuzzy = vectorize_fuzzy_output(lin_space=sugar_space, fuzzyfi_func=fuzzify_blood_sugar)
+
     # Fuzzify inputs
     age_fuzzy = fuzzify_age(age_input)
     bmi_fuzzy = fuzzify_bmi(bmi_input)
@@ -98,16 +100,28 @@ def predict_blood_sugar(age_input, bmi_input, activity_input):
     # Apply fuzzy rules
     rules = apply_rules(age_fuzzy, bmi_fuzzy, activity_fuzzy)
 
-    # Define output membership function ranges
-    blood_sugar_levels = {
-        'low': np.arange(50, 91, 1),
-        'normal': np.arange(70, 111, 1),
-        'high': np.arange(100, 161, 1)
-    }
+    # Apply Implication
+    implication = {}
+    implication_counter = {}
+    for fuzzy_name, value in rules:
+        min_value = np.minimum(value, sugar_space_fuzzy[fuzzy_name])
+        if fuzzy_name not in implication:
+            implication[fuzzy_name] = min_value
+            implication_counter[fuzzy_name] = 1
+        else:
+            implication[fuzzy_name] += min_value
+            implication_counter[fuzzy_name] += 1
+    for fuzzy_name, value in implication.items():
+        implication[fuzzy_name] /= implication_counter[fuzzy_name]
 
-    # Defuzzify the result to get a crisp value
-    predicted_blood_sugar = defuzzify(rules, blood_sugar_levels)
+    # Apply Aggregation
+    fuzzy_names = list(implication.keys())
+    aggregation = implication[fuzzy_names[0]]
+    for fuzzy_name in fuzzy_names[1:]:
+        aggregation = np.maximum(aggregation, implication[fuzzy_name])
 
+    # Apply deffuzzyfication
+    predicted_blood_sugar = defuzzify(space=sugar_space, aggregation=aggregation)
     return predicted_blood_sugar
 
 
@@ -182,10 +196,10 @@ def draw_output_over_time():
     ages = (80 - 10) * time_space + 10
 
     # BMI changes over time
-    bmis = 20 + 0.2 * noise_1 + 6 * time_space
+    bmis = 20 + 0.2 * noise_1 + 5 * time_space
 
     # Activity level changes
-    activities = 9 + 0.2 * noise_2 - 3 * time_space
+    activities = 9 + 0.2 * noise_2 - 4 * time_space
 
     # Predict blood sugar levels for each time step
     predicted_blood_sugars = [predict_blood_sugar(ages[t], bmis[t], activities[t]) for t in range(time_steps)]
